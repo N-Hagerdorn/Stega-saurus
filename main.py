@@ -25,9 +25,9 @@ def encodeRoutine():
 
     # Show the cover image if the user so desires
     if input('Would you like to see the cover image before encoding? Y or N: ').upper() == 'Y':
-        print('Press any key to close the image...')
 
         # Show the image, wait for a key to be pressed, and close the image window when a key is pressed
+        print('Press any key to close the image...')
         cv2.imshow('image', cover)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
@@ -72,6 +72,7 @@ def encodeRoutine():
     print('Coded image saved as ' + encoded_img_filename)
 
     # Show the encoded image
+    print('Press any key to close the image...')
     cv2.imshow('image', encoded_img)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
@@ -96,6 +97,7 @@ def decodeRoutine():
 
     # Show the image if the user so desires
     if input('Would you like to see the image? Y or N: ').upper() == 'Y':
+
         print('Press any key to close the image...')
         cv2.imshow('image', image)
         cv2.waitKey(0)
