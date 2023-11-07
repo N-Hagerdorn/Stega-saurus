@@ -1,3 +1,10 @@
+"""
+Author: Nathan Hagerdorn
+Date: 6 November 2023
+
+Steganography Encoder class for the ECCS 4431 Steganography project.
+"""
+
 import numpy as np
 
 

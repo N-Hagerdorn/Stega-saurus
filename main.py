@@ -1,3 +1,10 @@
+"""
+Author: Nathan Hagerdorn
+Date: 6 November 2023
+
+Main and supporting methods for the ECCS 4431 Steganography project.
+"""
+
 import cv2
 from stegEncoder import StegEncoder as steve
 
