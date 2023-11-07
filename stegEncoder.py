@@ -1,15 +1,23 @@
 import numpy as np
 
+
 class StegEncoder:
+    """
+    StegEncoder class
+
+    A set of methods to perform steganography - encoding a concealed message into an image to avoid detection.
+    Performs encoding, decoding, key generation, and other necessary actions for steganography.
+    """
 
     # Use a pattern that is very unlikely to occur naturally in the pixels of an image as an end flag
     # to tell the decoder when the end of the message is reached
-    MESSAGE_END_FLAG = '\1\1'
+    MESSAGE_END_FLAG = '\0END'
 
     @staticmethod
     def stringToBinary(ascii_string):
         """
         Convert an ASCII string into a corresponding binary string.
+
         :param ascii_string:        A string of ASCII characters
         :return:                    A binary string consisting of th ASCII codes of the input string's characters
         """
@@ -19,11 +27,15 @@ class StegEncoder:
     @staticmethod
     def keyToBinaryKey(raw_key):
         """
-        Convert a raw key string into a binary string for encoding and decoding data
+        Convert a raw key string into a binary string for encoding and decoding data.
+
         :param raw_key:             An ASCII key string used to generate a unique, reproducible binary key string
         :return:                    The binary key string produced by hashing the original key string
         """
 
+        # hash method produces a fixed-length output from which to generate the key string
+        # The output of the hash is numeric, so it can be turned into an ASCII string and then
+        # converted to binary without risk of invalid (UNICODE) symbols
         return StegEncoder.stringToBinary(str(hash(raw_key)))
 
     @staticmethod
@@ -38,6 +50,18 @@ class StegEncoder:
         """
 
         msg_binary = StegEncoder.stringToBinary(message + StegEncoder.MESSAGE_END_FLAG)
+
+        # Calculate the number of elements (monochrome pixels) in the cover image
+        img_dims = cover.shape
+        img_element_count = np.prod(img_dims)
+
+        # Calculate the number of elements needed to encode the binary message using the given key
+        key_space_efficiency = key.count('1') / len(key)
+        needed_space = len(msg_binary) / key_space_efficiency
+
+        # If there isn't enough space in the cover image, don't even try to encode the message
+        if needed_space > img_element_count:
+            raise IndexError('Cover image is not large enough to store the message with this key')
 
         key_idx = -1
         pixel_idx = -1
@@ -54,16 +78,24 @@ class StegEncoder:
             if key[key_idx] == '0':
                 continue
 
-            msg_bit = msg_binary[0]
-            msg_binary = msg_binary[1:]
+            # Get the next 3 bits of the message, or as many as there are left if there are fewer than 3
+            msg_bits = msg_binary
+
+            NUM_COLOR_CHANNELS = 3
+            if len(msg_binary) > NUM_COLOR_CHANNELS:
+                msg_bits = msg_binary[0:NUM_COLOR_CHANNELS]
+                msg_binary = msg_binary[NUM_COLOR_CHANNELS:]
+            else:
+                msg_binary = ''
 
             # Get the next pixel from the image
             # Since pixel_idx is indexing a 2D list,
             # use integer division to find the appropriate row number and modulus to find the column number
             pixel = cover[pixel_idx // cover.shape[1], pixel_idx % cover.shape[1]]
 
-            # Encode into only the red channel (this will eventually change to use all channels)
-            pixel[2] = int(pixel[2] / 2) * 2 + int(msg_bit)
+            # Encode into each channel of the pixel
+            for channel_idx in range(len(msg_bits)):
+                pixel[channel_idx] = int(pixel[channel_idx] / 2) * 2 + int(msg_bits[channel_idx])
 
         return cover
 
@@ -80,7 +112,6 @@ class StegEncoder:
         CHAR_BIT_WIDTH = 8          # Using ASCII characters, which are 8-bit
 
         symbol_binary_string = ''
-        symbol = ''
         message = ''
 
         rows, cols, channels = image.shape
@@ -101,28 +132,45 @@ class StegEncoder:
             if key[key_idx] == '0':
                 continue
 
+            # If the end of the image is reached before breaking out of the loop,
+            # there is no message to be decoded with the given key
             if pixel_idx >= rows * cols:
                 return None
 
             pixel = image[pixel_idx // image.shape[1], pixel_idx % image.shape[1]]
 
-            message_bit = pixel[2] % 2
+            # Get the least significant bits of each color channel of the pixel
+            message_bits = [0, 0, 0]
+            for channel_idx in range(len(pixel)):
+                message_bits[channel_idx] = pixel[channel_idx] % 2
 
-            symbol_binary_string += str(message_bit)
+            symbol_binary_string += ''.join(str(bit) for bit in message_bits)
 
+            # Once enough bits have been collected to make a character, process them into a character
             if len(symbol_binary_string) >= CHAR_BIT_WIDTH:
-                symbol_int = int(symbol_binary_string, 2)  # Convert the binary string to its base 10 integer form
-                symbol = chr(symbol_int)
-                symbol_binary_string = ''
 
-                message += symbol
-                if message[-2:] == StegEncoder.MESSAGE_END_FLAG:
+                # Process the first 8 bits in the binary string and save any excess for the next symbol
+                excess_bits = ''
+                if len(symbol_binary_string) > CHAR_BIT_WIDTH:
+                    excess_bits = symbol_binary_string[CHAR_BIT_WIDTH:]
+                symbol_int = int(symbol_binary_string[0:CHAR_BIT_WIDTH], 2)  # Convert the binary string to its base 10 integer form
+                symbol_binary_string = excess_bits
+                message += chr(symbol_int)
+
+                if message.endswith(StegEncoder.MESSAGE_END_FLAG):
                     break
 
         return message[:-len(StegEncoder.MESSAGE_END_FLAG)]
 
     @staticmethod
-    def fuzz(image, degree):
+    def noisify(image, degree):
+        """
+        Add background noise to an image to help conceal a hidden message.
+
+        :param image:               The image to which noise will be added
+        :param degree:              The degree of noise to add to the image
+        :return:                    The noisified image
+        """
 
         # Degree indicates the number of bits of the 8-bit pixel to randomize, so it must be in the range [0, 8]
         if degree < 0:
@@ -143,6 +191,7 @@ class StegEncoder:
 
             for pixel in row:
                 for channel_idx in range(len(pixel)):
+
                     # Integer division and re-multiplication results in rounding off the least significant bits
                     # Add back a random amount to introduce noise into the least significant bits
                     pixel[channel_idx] = (pixel[channel_idx] // val) * val + rns[rand_idx]
